@@ -3,6 +3,7 @@ local esxloaded, currentstop = false, 0
 local HasAlreadyEnteredArea, clockedin, vehiclespawned, albetogetbags, truckdeposit = false, false, false, false, false
 local work_truck, NewDrop, LastDrop, binpos, truckpos, garbagebag, truckplate, mainblip, AreaType, AreaInfo, currentZone, currentstop, AreaMarker
 local Blips, CollectionJobs, depositlist = {}, {}, {}
+local elements = {}
 
 Citizen.CreateThread(function()
 	while ESX == nil do
@@ -31,7 +32,118 @@ Citizen.CreateThread(function()
 	end
 		
 	esxloaded = true
+
+	elements = Config.AuthorizedVehicles
 end)
+
+--- START RAGEUI ---
+---Cloakroom---
+local lockerMenu = RageUI.CreateMenu("", _U('cloakroom'), 0, 0,  "tjmenu", "garbage_bgd", 255, 255, 255, 255)	
+lockerMenu:DisplayGlare(false)
+lockerMenu.EnableMouse = false
+
+local carMenu = RageUI.CreateMenu("", _U('cloakroom'), 0, 0,  "tjmenu", "garbage_bgd", 255, 255, 255, 255)	
+carMenu:DisplayGlare(false)
+carMenu.EnableMouse = false
+
+-----------------------------------NEW RAGEUI
+Citizen.CreateThread(function()
+	local doOnce = false
+    while (true) do
+        Citizen.Wait(1.0)
+
+--------RageUI Cloakroom
+		RageUI.IsVisible(lockerMenu, function()
+			RageUI.Button(_U('job_wear'), _U('job_wear_desc'), {}, true, {
+                onSelected = function()
+					clockedin = true
+					ESX.TriggerServerCallback('esx_skin:getPlayerSkin', function(skin, jobSkin)
+						if skin.sex == 0 then
+							TriggerEvent('skinchanger:loadClothes', skin, jobSkin.skin_male)
+						else
+							TriggerEvent('skinchanger:loadClothes', skin, jobSkin.skin_female)
+						end
+					end)
+					RageUI.CloseAll()
+                end,
+            });
+		
+			RageUI.Button(_U('citizen_wear'), _U('citizen_wear_desc'), {}, true, {
+                onSelected = function()
+                    clockedin = false
+					ESX.TriggerServerCallback('esx_skin:getPlayerSkin', function(skin)
+						TriggerEvent('skinchanger:loadSkin', skin)
+					end)
+                end,
+            });
+			
+		end, function()	end)
+
+--------RageUI VehicleSpawnerMenu
+
+		RageUI.IsVisible(carMenu, function()
+			for i=1, #elements, 1 do
+				vehicleProps = {
+					label = elements[i].label, 
+					name = elements[i].name,
+					cabdesc = elements[i].label .. ' Garbage Truck',
+					bodyHealth = 1000.0,
+					engineHealth = 1000.0,
+					fuelLevel = 100,
+					--plate = 'LSSD ' .. math.random(100, 900)
+				}
+				
+				RageUI.Button(elements[i].label, vehicleProps.cabdesc, {}, true, {
+					onSelected = function()
+	
+					-- Check spawn point.
+					if not ESX.Game.IsSpawnPointClear(Config.VehicleSpawnPoint.Pos, 3.0) then
+						ESX.ShowNotification(_U('spawnpoint_blocked'))
+						return
+					end
+	
+					ESX.Game.SpawnVehicle(elements[i].model, Config.VehicleSpawnPoint.Pos, Config.VehicleSpawnPoint.Heading, 	function(vehicle)
+						ESX.Game.SetVehicleProperties(vehicle, vehicleProps)
+						
+						local trucknumber = Config.TruckPlateNumb + 1
+			
+						if trucknumber <=9 then
+							SetVehicleNumberPlateText(vehicle, 'GCREW00'..trucknumber)
+							worktruckplate =   'GCREW00'..trucknumber 
+						elseif trucknumber <=99 then
+							SetVehicleNumberPlateText(vehicle, 'GCREW0'..trucknumber)
+							worktruckplate =   'GCREW0'..trucknumber 
+						else
+							SetVehicleNumberPlateText(vehicle, 'GCREW'..trucknumber)
+							worktruckplate =   'GCREW'..trucknumber 
+						end
+
+						if Config.UseCarKeys then
+							TriggerServerEvent('esx_vehiclelock:givekey', 'no', plate) -- vehicle lock
+						end
+						
+						
+						TriggerServerEvent('esx_garbagecrew:movetruckcount')   
+						SetEntityAsMissionEntity(vehicle,true, true)
+						TaskWarpPedIntoVehicle(GetPlayerPed(-1), vehicle, -1)  
+						vehiclespawned = true 
+						albetogetbags = false
+						work_truck = vehicle
+						currentstop = 0
+						FindDeliveryLoc()
+
+					end)
+
+					RageUI.CloseAll()
+					ESX.UI.Menu.CloseAll()
+
+				end,});
+			end	
+
+		end, function()	end)
+    end
+end)
+-----------------------------------END NEW RAGEUI
 
 RegisterNetEvent('esx:playerLoaded')
 AddEventHandler('esx:playerLoaded', function(xPlayer)
@@ -206,6 +318,9 @@ Citizen.CreateThread( function()
 					while IsPedInAnyVehicle(GetPlayerPed(-1)) do
 						Citizen.Wait(0)
 					end
+					if Config.UseCarKeys then
+						TriggerServerEvent('esx_vehiclelock:deletekey', vehicleProps.plate) -- vehicle lock
+					end
 					Citizen.InvokeNative( 0xAE3CBE5BF394C9C9, Citizen.PointerValueIntInitialized( work_truck ) )
 					if Blips['delivery'] ~= nil then
 						RemoveBlip(Blips['delivery'])
@@ -298,6 +413,7 @@ Citizen.CreateThread( function()
 			HasAlreadyEnteredArea = false
 			sleep = 1000
 			TriggerEvent('esx_garbagecrew:leftarea', currentZone)
+			RageUI.CloseAll()
 		end
 
 		Citizen.Wait(sleep)
@@ -452,73 +568,88 @@ function IsGarbageJob()
 end
 
 function MenuCloakRoom()
-	ESX.UI.Menu.CloseAll()
+	if Config.UseRageUI then
+		RageUI.CloseAll()
+		ESX.UI.Menu.CloseAll()
+		RageUI.Visible(lockerMenu, not RageUI.Visible(lockerMenu))
+	else
+		ESX.UI.Menu.CloseAll()
 
-	ESX.UI.Menu.Open('default', GetCurrentResourceName(), 'cloakroom', {
+		ESX.UI.Menu.Open('default', GetCurrentResourceName(), 'cloakroom', {
 			title    = _U('cloakroom'),
 			elements = {
 				{label = _U('job_wear'), value = 'job_wear'},
 				{label = _U('citizen_wear'), value = 'citizen_wear'}
 			}}, function(data, menu)
-			if data.current.value == 'citizen_wear' then
-				clockedin = false
-				ESX.TriggerServerCallback('esx_skin:getPlayerSkin', function(skin)
-					TriggerEvent('skinchanger:loadSkin', skin)
-				end)
-			elseif data.current.value == 'job_wear' then
-				clockedin = true
-				ESX.TriggerServerCallback('esx_skin:getPlayerSkin', function(skin, jobSkin)
-					if skin.sex == 0 then
-						TriggerEvent('skinchanger:loadClothes', skin, jobSkin.skin_male)
-					else
-						TriggerEvent('skinchanger:loadClothes', skin, jobSkin.skin_female)
-					end
-				end)
-			end
-			menu.close()
-		end, function(data, menu)
-			menu.close()
+				if data.current.value == 'citizen_wear' then
+					clockedin = false
+					ESX.TriggerServerCallback('esx_skin:getPlayerSkin', function(skin)
+						TriggerEvent('skinchanger:loadSkin', skin)
+					end)
+				elseif data.current.value == 'job_wear' then
+					clockedin = true
+					ESX.TriggerServerCallback('esx_skin:getPlayerSkin', function(skin, jobSkin)
+						if skin.sex == 0 then
+							TriggerEvent('skinchanger:loadClothes', skin, jobSkin.skin_male)
+						else
+							TriggerEvent('skinchanger:loadClothes', skin, jobSkin.skin_female)
+						end
+					end)
+				end
+				menu.close()
+			end, function(data, menu)
+				menu.close()
 		end)
+	end
 end
 
 function MenuVehicleSpawner()
-	local elements = {}
+	if Config.UseRageUI then
+		RageUI.CloseAll()
+		ESX.UI.Menu.CloseAll()
+		RageUI.Visible(carMenu, not RageUI.Visible(carMenu))
+	else
+		local elements = {}
 
-	for i=1, #Config.Trucks, 1 do
-		table.insert(elements, {label = GetLabelText(GetDisplayNameFromVehicleModel(Config.Trucks[i])), value = Config.Trucks[i]})
-	end
+		for i=1, #Config.Trucks, 1 do
+			table.insert(elements, {label = GetLabelText(GetDisplayNameFromVehicleModel(Config.Trucks[i])), value = Config.Trucks[i]})
+		end
 
-	ESX.UI.Menu.CloseAll()
+		ESX.UI.Menu.CloseAll()
 
-	ESX.UI.Menu.Open('default', GetCurrentResourceName(), 'vehiclespawner', {
+		ESX.UI.Menu.Open('default', GetCurrentResourceName(), 'vehiclespawner', {
 			title    = _U('vehiclespawner'),
 			elements = elements
 		}, function(data, menu)
-			ESX.Game.SpawnVehicle(data.current.value, Config.VehicleSpawn.pos, 270.0, function(vehicle)
-				local trucknumber = Config.TruckPlateNumb + 1
-				if trucknumber <=9 then
-					SetVehicleNumberPlateText(vehicle, 'GCREW00'..trucknumber)
-					worktruckplate =   'GCREW00'..trucknumber 
-				elseif trucknumber <=99 then
-					SetVehicleNumberPlateText(vehicle, 'GCREW0'..trucknumber)
-					worktruckplate =   'GCREW0'..trucknumber 
-				else
-					SetVehicleNumberPlateText(vehicle, 'GCREW'..trucknumber)
-					worktruckplate =   'GCREW'..trucknumber 
-				end
-				TriggerServerEvent('esx_garbagecrew:movetruckcount')   
-				SetEntityAsMissionEntity(vehicle,true, true)
-				TaskWarpPedIntoVehicle(GetPlayerPed(-1), vehicle, -1)  
-				vehiclespawned = true 
-				albetogetbags = false
-				work_truck = vehicle
+		
+		ESX.Game.SpawnVehicle(data.current.value, Config.VehicleSpawn.pos, 270.0, function(vehicle)
+			local trucknumber = Config.TruckPlateNumb + 1
+			
+			if trucknumber <=9 then
+				SetVehicleNumberPlateText(vehicle, 'GCREW00'..trucknumber)
+				worktruckplate =   'GCREW00'..trucknumber 
+			elseif trucknumber <=99 then
+				SetVehicleNumberPlateText(vehicle, 'GCREW0'..trucknumber)
+				worktruckplate =   'GCREW0'..trucknumber 
+			else
+				SetVehicleNumberPlateText(vehicle, 'GCREW'..trucknumber)
+				worktruckplate =   'GCREW'..trucknumber 
+			end
+				
+			TriggerServerEvent('esx_garbagecrew:movetruckcount')   
+			SetEntityAsMissionEntity(vehicle,true, true)
+			TaskWarpPedIntoVehicle(GetPlayerPed(-1), vehicle, -1)  
+			vehiclespawned = true 
+			albetogetbags = false
+			work_truck = vehicle
+			currentstop = 0
+			FindDeliveryLoc()
 
-				currentstop = 0
-				FindDeliveryLoc()
-			end)
+		end)
 
 			menu.close()
 		end, function(data, menu)
 			menu.close()
 		end)
+	end
 end
