@@ -4,15 +4,22 @@ Config.TruckPlateNumb = 0  -- This starts the custom plate for trucks at 0
 Config.MaxStops	= 10 -- Total number of stops a person is allowed to do before having to return to depot.
 Config.MaxBags = 10 -- Total number of bags a person can get out of a bin
 Config.MinBags = 4 -- Min number of bags that a bin can contain.
-Config.BagPay = 25 -- The amount paid to each person per bag
-Config.StopPay = 200 -- Total pay for the stop before bagpay.
+Config.BagPay = 15 -- The amount paid to each person per bag
+Config.StopPay = 125 -- Total pay for the stop before bagpay.
 Config.JobName = 'garbage'  -- use this to set the jobname that you want to be able to do garbagecrew 
+Config.UseRageUI = true
+Config.UseCarKeys = true
 
 --Config.UseWorkClothing = true	-- This feature has been removed until I can find the issue with removing player loadout on reload
 
 Config.Trucks = {
   'trash',
   'trash2',
+}
+
+Config.AuthorizedVehicles = {
+	{model = 'trash', label = 'Trash'},
+	{model = 'trash2', label = 'Trash2'},
 }
 
 Config.DumpstersAvaialbe = {
@@ -31,6 +38,11 @@ Config.DumpstersAvaialbe = {
 }
 
 Config.VehicleSpawn = {pos = vector3(-328.50,-1520.99, 27.53),}
+
+Config.VehicleSpawnPoint = {
+  Pos     = {x = -328.50, y = -1520.99, z = 27.53},
+  Heading = 270.0
+}
 
 Config.Zones = {
 	[1] = {type = 'Zone', size = 5.0 , name = 'endmission', pos = vector3(-335.26,-1529.56, 26.58)},
